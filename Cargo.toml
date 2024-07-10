@@ -29,7 +29,7 @@ rusoto_s3 = "0.48.0"
 scylla = "0.13.0"
 cloud-storage = "0.11.1"
 
-moka = "0.12.8"
+moka = { version = "0.12.8", features = ["future"] } # or "future"
 rayon = "1.5.1"
 crc32fast = "1.3.2"
 enum_dispatch = "0.3.8"
