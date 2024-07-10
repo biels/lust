@@ -1,12 +1,12 @@
+use crate::pipelines::ProcessingMode;
+use anyhow::{anyhow, Result};
+use image::imageops::FilterType;
+use image::ImageFormat;
+use once_cell::sync::OnceCell;
+use poem_openapi::Enum;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
-use anyhow::{anyhow, Result};
-use image::ImageFormat;
-use image::imageops::FilterType;
-use once_cell::sync::OnceCell;
-use serde::Deserialize;
-use poem_openapi::Enum;
-use crate::pipelines::ProcessingMode;
 
 use crate::storage::backends::BackendConfigs;
 
@@ -33,48 +33,57 @@ pub async fn init(config_file: &Path) -> Result<()> {
             "json" => serde_json::from_slice(&file)?,
             "yaml" => serde_yaml::from_slice(&file)?,
             "yml" => serde_yaml::from_slice(&file)?,
-            _ => return Err(anyhow!("Config file must have an extension of either `.json`,`.yaml` or `.yml`"))
+            _ => {
+                return Err(anyhow!(
+                    "Config file must have an extension of either `.json`,`.yaml` or `.yml`"
+                ))
+            }
         };
 
         validate(&cfg)?;
         let _ = CONFIG.set(cfg);
         Ok(())
     } else {
-        Err(anyhow!("Config file must have an extension of either `.json` or `.yaml`"))
+        Err(anyhow!(
+            "Config file must have an extension of either `.json` or `.yaml`"
+        ))
     }
 }
 
-
 fn validate(cfg: &RuntimeConfig) -> Result<()> {
     for (name, cfg) in cfg.buckets.iter() {
-        if !cfg.formats.png
-            && !cfg.formats.jpeg
-            && !cfg.formats.gif
-            && !cfg.formats.webp
-        {
-            return Err(anyhow!("Bucket {} is invalid: At least one encoding format must be enabled.", name))
+        if !cfg.formats.png && !cfg.formats.jpeg && !cfg.formats.gif && !cfg.formats.webp {
+            return Err(anyhow!(
+                "Bucket {} is invalid: At least one encoding format must be enabled.",
+                name
+            ));
         }
 
         if let Some(ref def) = cfg.default_serving_preset {
             if !cfg.presets.contains_key(def) {
-                return Err(anyhow!("Bucket {} is invalid: Default serving preset does not exist.", name))
+                return Err(anyhow!(
+                    "Bucket {} is invalid: Default serving preset does not exist.",
+                    name
+                ));
             }
         }
 
         if let Some(default_format) = cfg.default_serving_format {
             if !cfg.formats.is_enabled(default_format) {
-                return Err(anyhow!("Bucket {} is invalid: Default serving format is not an enabled encoding format.", name))
+                return Err(anyhow!("Bucket {} is invalid: Default serving format is not an enabled encoding format.", name));
             }
         }
 
         if cfg.presets.keys().any(|v| v == "original") {
-            return Err(anyhow!("Bucket {} is invalid: The `original` preset name is reserved.", name))
+            return Err(anyhow!(
+                "Bucket {} is invalid: The `original` preset name is reserved.",
+                name
+            ));
         }
     }
 
     Ok(())
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct RuntimeConfig {
@@ -113,8 +122,7 @@ pub struct RuntimeConfig {
 impl RuntimeConfig {
     #[inline]
     pub fn valid_global_size(&self, size: usize) -> bool {
-        self
-            .max_upload_size
+        self.max_upload_size
             .map(|limit| size <= (limit * 1024))
             .unwrap_or(true)
     }
@@ -180,12 +188,11 @@ pub struct BucketConfig {
 impl BucketConfig {
     #[inline]
     pub fn sizing_preset_ids(&self) -> Vec<u32> {
-        let mut presets: Vec<u32> =
-            self.presets.keys().map(crate::utils::crc_hash).collect();
-        match self.default_serving_preset {
-            None => presets.push(0),
-            _ => ()
-        }
+        let mut presets: Vec<u32> = self.presets.keys().map(crate::utils::crc_hash).collect();
+
+        if self.default_serving_preset.is_none() {
+            presets.push(0);
+        };
         presets
     }
 }
@@ -230,7 +237,7 @@ impl ImageKind {
             "jpeg" => Some(Self::Jpeg),
             "gif" => Some(Self::Gif),
             "webp" => Some(Self::Webp),
-            _ => None
+            _ => None,
         }
     }
 
@@ -240,7 +247,7 @@ impl ImageKind {
             image::ImageFormat::Jpeg => Some(Self::Jpeg),
             image::ImageFormat::Gif => Some(Self::Gif),
             image::ImageFormat::WebP => Some(Self::Webp),
-            _ => None
+            _ => None,
         }
     }
 
@@ -258,15 +265,9 @@ impl ImageKind {
     }
 
     pub fn variants() -> &'static [Self] {
-        &[
-            Self::Png,
-            Self::Jpeg,
-            Self::Gif,
-            Self::Webp,
-        ]
+        &[Self::Png, Self::Jpeg, Self::Gif, Self::Webp]
     }
 }
-
 
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub struct ImageFormats {
@@ -324,19 +325,19 @@ impl ImageFormats {
 
     pub fn first_enabled_format(&self) -> ImageKind {
         if self.png {
-            return ImageKind::Png
+            return ImageKind::Png;
         }
 
         if self.jpeg {
-            return ImageKind::Jpeg
+            return ImageKind::Jpeg;
         }
 
         if self.webp {
-            return ImageKind::Webp
+            return ImageKind::Webp;
         }
 
         if self.gif {
-            return ImageKind::Gif
+            return ImageKind::Gif;
         }
 
         panic!("Invalid configuration, expected at least one enabled format.")
@@ -423,4 +424,3 @@ const fn default_true() -> bool {
 const fn default_original_format() -> ImageKind {
     ImageKind::Png
 }
-

@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::config::{BucketConfig, ImageKind};
 use bytes::Bytes;
 use serde::Deserialize;
-use crate::config::{BucketConfig, ImageKind};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
-pub mod realtime;
 pub mod aot;
 pub mod jit;
+pub mod realtime;
 mod register;
 
 pub use register::{Pipeline, PipelineSelector};
@@ -77,16 +77,15 @@ pub struct PipelineController {
 }
 
 impl PipelineController {
-    pub fn on_upload(
-        &self,
-        kind: ImageKind,
-        data: Vec<u8>,
-    ) -> anyhow::Result<ExecutionResult> {
+    pub fn on_upload(&self, kind: ImageKind, data: Vec<u8>) -> anyhow::Result<ExecutionResult> {
         let instant = Instant::now();
         let result = self.inner.on_upload(kind, data)?;
         let execution_time = instant.elapsed();
 
-        Ok(ExecutionResult { result, execution_time })
+        Ok(ExecutionResult {
+            result,
+            execution_time,
+        })
     }
 
     pub fn on_fetch(
@@ -98,10 +97,14 @@ impl PipelineController {
         custom_size: Option<(u32, u32)>,
     ) -> anyhow::Result<ExecutionResult> {
         let instant = Instant::now();
-        let result = self.inner.on_fetch(desired_kind, data_kind, data, sizing_id, custom_size)?;
+        let result = self
+            .inner
+            .on_fetch(desired_kind, data_kind, data, sizing_id, custom_size)?;
         let execution_time = instant.elapsed();
 
-        Ok(ExecutionResult { result, execution_time })
+        Ok(ExecutionResult {
+            result,
+            execution_time,
+        })
     }
 }
-

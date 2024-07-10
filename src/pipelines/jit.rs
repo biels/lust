@@ -1,9 +1,9 @@
-use bytes::Bytes;
-use hashbrown::HashMap;
-use image::load_from_memory_with_format;
 use crate::config::{BucketConfig, ImageFormats, ImageKind, ResizingConfig};
 use crate::pipelines::{Pipeline, PipelineResult, StoreEntry};
 use crate::processor;
+use bytes::Bytes;
+use hashbrown::HashMap;
+use image::load_from_memory_with_format;
 
 pub struct JustInTimePipeline {
     presets: HashMap<u32, ResizingConfig>,
@@ -13,9 +13,10 @@ pub struct JustInTimePipeline {
 impl JustInTimePipeline {
     pub fn new(cfg: &BucketConfig) -> Self {
         Self {
-            presets: cfg.presets
+            presets: cfg
+                .presets
                 .iter()
-                .map(|(key, cfg)| (crate::utils::crc_hash(key), cfg.clone()))
+                .map(|(key, cfg)| (crate::utils::crc_hash(key), *cfg))
                 .collect(),
             formats: cfg.formats,
         }
@@ -41,7 +42,11 @@ impl Pipeline for JustInTimePipeline {
 
         Ok(PipelineResult {
             response: None,
-            to_store: vec![StoreEntry { kind: img.kind, data: img.buff, sizing_id: img.sizing_id }],
+            to_store: vec![StoreEntry {
+                kind: img.kind,
+                data: img.buff,
+                sizing_id: img.sizing_id,
+            }],
         })
     }
 
@@ -71,12 +76,7 @@ impl Pipeline for JustInTimePipeline {
             (img, 0)
         };
 
-        let encoded = processor::encoder::encode_once(
-            webp_config,
-            desired_kind,
-            img,
-            sizing_id,
-        )?;
+        let encoded = processor::encoder::encode_once(webp_config, desired_kind, img, sizing_id)?;
 
         Ok(PipelineResult {
             response: Some(StoreEntry {
@@ -88,7 +88,7 @@ impl Pipeline for JustInTimePipeline {
                 kind: encoded.kind,
                 data: encoded.buff.clone(),
                 sizing_id: encoded.sizing_id,
-            }]
+            }],
         })
     }
 }

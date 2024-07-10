@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::config::{ImageKind, ResizingConfig};
 use bytes::Bytes;
 use hashbrown::HashMap;
-use image::{DynamicImage, load_from_memory_with_format};
-use crate::config::{ImageKind, ResizingConfig};
+use image::{load_from_memory_with_format, DynamicImage};
+use std::sync::Arc;
 
 pub struct ResizedImage {
     pub sizing_id: u32,
@@ -34,8 +34,8 @@ pub fn resize_image_to_presets(
     drop(tx);
 
     let mut finished = vec![ResizedImage {
-       sizing_id: 0,
-       img: original_image.as_ref().clone(),
+        sizing_id: 0,
+        img: original_image.as_ref().clone(),
     }];
     while let Ok(encoded) = rx.recv() {
         finished.push(encoded);

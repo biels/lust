@@ -1,9 +1,8 @@
-use std::io::ErrorKind;
-use std::path::PathBuf;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bytes::Bytes;
-use uuid::Uuid;
+use std::io::ErrorKind;
+use std::path::PathBuf;
 
 use crate::config::ImageKind;
 use crate::controller::get_bucket_by_id;
@@ -15,9 +14,7 @@ pub struct FileSystemBackend {
 
 impl FileSystemBackend {
     pub fn new(dir: PathBuf) -> Self {
-        Self {
-            directory: dir,
-        }
+        Self { directory: dir }
     }
 
     #[inline]
@@ -33,7 +30,7 @@ impl StorageBackend for FileSystemBackend {
     async fn store(
         &self,
         bucket_id: u32,
-        image_id: Uuid,
+        image_id: &str,
         kind: ImageKind,
         sizing_id: u32,
         data: Bytes,
@@ -48,15 +45,15 @@ impl StorageBackend for FileSystemBackend {
                 tokio::fs::create_dir_all(store_in).await?;
                 tokio::fs::write(&path, data).await?;
                 Ok(())
-            },
-            Err(other) => Err(other.into())
+            }
+            Err(other) => Err(other.into()),
         }
     }
 
     async fn fetch(
         &self,
         bucket_id: u32,
-        image_id: Uuid,
+        image_id: &str,
         kind: ImageKind,
         sizing_id: u32,
     ) -> anyhow::Result<Option<Bytes>> {
@@ -74,7 +71,7 @@ impl StorageBackend for FileSystemBackend {
     async fn delete(
         &self,
         bucket_id: u32,
-        image_id: Uuid,
+        image_id: &str,
     ) -> anyhow::Result<Vec<(u32, ImageKind)>> {
         let bucket = get_bucket_by_id(bucket_id)
             .ok_or_else(|| anyhow!("Bucket does not exist."))?
@@ -87,10 +84,10 @@ impl StorageBackend for FileSystemBackend {
                 let path = store_in.join(format!("{}.{}", image_id, kind.as_file_extension()));
                 debug!("Purging image  @ {:?}", &path);
 
-                 match tokio::fs::remove_file(&path).await {
+                match tokio::fs::remove_file(&path).await {
                     Ok(()) => {
                         hit_entries.push((sizing_id, *kind));
-                    },
+                    }
                     Err(ref e) if e.kind() == ErrorKind::NotFound => continue,
                     Err(other) => return Err(other.into()),
                 }
@@ -100,6 +97,3 @@ impl StorageBackend for FileSystemBackend {
         Ok(hit_entries)
     }
 }
-
-
-

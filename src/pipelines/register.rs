@@ -1,11 +1,11 @@
-use bytes::Bytes;
-use enum_dispatch::enum_dispatch;
 use crate::config::ImageKind;
 use crate::pipelines::PipelineResult;
+use bytes::Bytes;
+use enum_dispatch::enum_dispatch;
 
-use super::realtime::RealtimePipeline;
 use super::aot::AheadOfTimePipeline;
 use super::jit::JustInTimePipeline;
+use super::realtime::RealtimePipeline;
 
 /// Pipelines are dynamically selected here.
 ///
