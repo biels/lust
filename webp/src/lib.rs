@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 
 use anyhow::{Result, anyhow};
 use image::{DynamicImage, RgbaImage};
+use libc::c_int;
 use libwebp_sys::WebPEncodingError::VP8_ENC_OK;
 use libwebp_sys::WebPPreset::WEBP_PRESET_DEFAULT;
 use libwebp_sys::*;
@@ -50,7 +51,8 @@ pub fn config(lossless: bool, quality: f32, method: i32, multi_threading: bool) 
         exact: 0,
         use_delta_palette: 0,
         use_sharp_yuv: 0,
-        pad: [100, 100],
+        qmin: 0,
+        qmax: 100,
     }
 }
 
@@ -211,11 +213,11 @@ unsafe fn encode(cfg: WebPConfig, image: &[u8], layout: &PixelLayout, width: u32
         cfg_ptr,
         WEBP_PRESET_DEFAULT,
         cfg.quality,
-        WEBP_ENCODER_ABI_VERSION,
+        WEBP_ENCODER_ABI_VERSION as c_int,
     );
     check_ok!(ok, "config init failed");
 
-    let ok = WebPPictureInitInternal(picture_ptr, WEBP_ENCODER_ABI_VERSION);
+    let ok = WebPPictureInitInternal(picture_ptr, WEBP_ENCODER_ABI_VERSION as c_int);
     check_ok!(ok, "picture init failed");
 
     (*picture_ptr).use_argb = cfg.lossless;

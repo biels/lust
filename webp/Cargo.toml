@@ -2,11 +2,12 @@
 name = "webp"
 version = "0.2.0"
 authors = ["Harrison Burt <57491488+ChillFish8@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 libwebp-sys = "0.9.5"
 image = "0.25.1"
-anyhow = "1"
+anyhow = "1.0.86"
+libc = "0.2"
