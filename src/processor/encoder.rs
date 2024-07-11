@@ -93,6 +93,14 @@ pub fn encode_to(
     }
 
     let mut buff = Cursor::new(Vec::new());
-    img.write_to(&mut buff, format)?;
+
+    // Convert the image to RGB if it's RGBA and we're encoding to JPEG
+    let img_to_encode = if format == ImageFormat::Jpeg && img.color() == image::ColorType::Rgba8 {
+        DynamicImage::ImageRgb8(img.to_rgb8())
+    } else {
+        img.clone()
+    };
+
+    img_to_encode.write_to(&mut buff, format)?;
     Ok(Bytes::from(buff.into_inner()))
 }
