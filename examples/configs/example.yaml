@@ -8,7 +8,7 @@ buckets:
   user-profiles:  # Define a bucket called "user-profiles", this is accessable out of `/images/user-profiles`.
     mode: jit     # Optimise images as and when they're required then store them.
     formats:
-      png: false  # Disable PNG encoding.
+      png: true  # Disable PNG encoding.
       jpeg: true  # Enable JPEG encoding.
       webp: true  # Enable WebP encoding.
       gif: false  # Disable GIF encoding.
