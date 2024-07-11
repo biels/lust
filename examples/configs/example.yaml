@@ -1,6 +1,5 @@
-backend:
-  filesystem:  # Use the filesystem backend.
-    directory: "data"
+backend: !filesystem
+  directory: "data"
 base_serving_path: "/images"  # Serve buckets out of `/images`
 global_cache:
   max_images: 1000    # At most cache 1000 images.
