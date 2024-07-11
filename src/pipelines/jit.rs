@@ -3,7 +3,7 @@ use crate::pipelines::{Pipeline, PipelineResult, StoreEntry};
 use crate::processor;
 use bytes::Bytes;
 use hashbrown::HashMap;
-use image::load_from_memory_with_format;
+use image::{ImageFormat, load_from_memory_with_format};
 
 pub struct JustInTimePipeline {
     presets: HashMap<u32, ResizingConfig>,
@@ -31,6 +31,9 @@ impl Pipeline for JustInTimePipeline {
             self.formats.webp_config.method.unwrap_or(4) as i32,
             self.formats.webp_config.threading,
         );
+
+        println!("JustInTimePipeline::on_upload");
+        println!("kind: {:?}", kind);
 
         let img = load_from_memory_with_format(&data, kind.into())?;
         let img = processor::encoder::encode_once(
