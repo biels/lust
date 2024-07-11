@@ -33,7 +33,7 @@ extern crate tracing;
 #[derive(Debug, Parser)]
 #[clap(author, version, about)]
 pub struct ServerConfig {
-    #[clap(short, long, env, default_value = "127.0.0.1")]
+    #[clap(long, env, default_value = "127.0.0.1")]
     /// The binding host address of the server.
     pub host: String,
 
@@ -62,10 +62,12 @@ async fn main() -> Result<()> {
     let bind = format!("{}:{}", args.host, args.port);
 
     if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var(
-            "RUST_LOG",
-            format!("{},poem=info,scylla=info,hyper=info", args.log_level),
-        );
+        unsafe {
+            std::env::set_var(
+                "RUST_LOG",
+                format!("{},poem=info,scylla=info,hyper=info", args.log_level),
+            );
+        }
     }
     tracing_subscriber::fmt::init();
 
@@ -96,7 +98,7 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|| format!("http://{}/v1{}", &bind, &serving_path)),
         );
 
-    let ui = api_service.redoc();
+    let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 
     let app = Route::new()

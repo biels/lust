@@ -7,13 +7,6 @@ use crate::StorageBackend;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BackendConfigs {
-    Scylla {
-        nodes: Vec<String>,
-        username: Option<String>,
-        password: Option<String>,
-        keyspace: String,
-        table: Option<String>,
-    },
     FileSystem {
         /// The base output directory to store files.
         directory: PathBuf,
@@ -31,12 +24,6 @@ pub enum BackendConfigs {
         #[serde(default)]
         /// Store objects with the `public-read` acl.
         store_public: bool,
-    },
-    GCPCloudStorage {
-        /// The name of the bucket.
-        name: String,
-        /// The path to the service account json file.
-        service_account: String,
     },
 }
 
@@ -58,36 +45,6 @@ impl BackendConfigs {
                     endpoint.to_string(),
                     *store_public,
                 )?;
-
-                Ok(Arc::new(backend))
-            }
-            Self::GCPCloudStorage {
-                name,
-                service_account,
-            } => {
-                let backend = super::gcp_cloud_storage::GCPCloudStorageBackend::new(
-                    name.to_string(),
-                    service_account.to_string(),
-                )
-                .await?;
-
-                Ok(Arc::new(backend))
-            }
-            Self::Scylla {
-                nodes,
-                username,
-                password,
-                keyspace,
-                table,
-            } => {
-                let backend = super::scylladb::ScyllaBackend::connect(
-                    keyspace.clone(),
-                    table.clone(),
-                    nodes,
-                    username.clone(),
-                    password.clone(),
-                )
-                .await?;
 
                 Ok(Arc::new(backend))
             }
