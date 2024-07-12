@@ -1,3 +1,8 @@
 /data
 /target
 /venv
+
+# .gitignore
+**/*.rs.bk
+Cargo.lock
+/config.local.yaml

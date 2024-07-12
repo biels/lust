@@ -1,27 +1,31 @@
 backend: !filesystem
-  directory: "data"
+  directory: "/var/lib/lust/images"
+
 base_serving_path: "/images"  # Serve buckets out of `/images`
+
 global_cache:
   max_images: 1000    # At most cache 1000 images.
   # max_capacity: 500   # Or we can set 500MB max capacity.
+
 buckets:
-  user-profiles:  # Define a bucket called "user-profiles", this is accessable out of `/images/user-profiles`.
+  profile-images:  # Define a bucket called "profile-images", this is accessible out of `/images/profile-images`.
     mode: jit     # Optimise images as and when they're required then store them.
     formats:
-      png: true  # Disable PNG encoding.
+      png: true   # Enable PNG encoding.
       jpeg: true  # Enable JPEG encoding.
       webp: true  # Enable WebP encoding.
       gif: false  # Disable GIF encoding.
       webp_config:
-        quality: 80       # Set lossy quality to 80%
-        method: 4         # Opt on the side of performance slightly more than quality.
+        quality: 90       # Set lossy quality to 90% for better quality
+        method: 6         # Higher quality encoding method
         threading: true   # Enable multi-threaded encoding.
       original_image_store_format: jpeg  # Store original images as JPEG
     default_serving_format: webp            # Serve the WebP format by default.
     default_serving_preset: medium-square   # Use the "medium-square" sizing preset by default.
-
     presets:
       medium-square:  # Define a new resizing preset.
         width: 500    # 500px
         height: 500   # 500px
     cache: null  # Use the global cache handler.
+
+  # You can add more buckets here as needed

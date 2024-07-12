@@ -9,7 +9,11 @@ license = "MIT"
 keywords = ["image", "image-server"]
 include = ["src/**/*", "Cargo.toml"]
 description = "A fast, auto-optimising image server designed for multiple backends with throughput and latency in mind."
-
+[package.metadata.deb]
+assets = [
+    ["target/release/lust", "usr/bin/", "755"],
+    ["lust.service", "lib/systemd/system/", "644"],
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
