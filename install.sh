@@ -31,7 +31,7 @@ cp target/release/lust $BINARY_DIR/
 
 # Copy the config file
 echo "Copying config file to $CONFIG_DIR..."
-cp config.sample.yaml $CONFIG_DIR/config.yaml
+cp examples/configs/example.yaml $CONFIG_DIR/config.yaml
 
 # Copy the systemd service file
 echo "Setting up systemd service..."

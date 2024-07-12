@@ -2,7 +2,7 @@
 [Unit]
 Description=Lust Image Processing Service
 After=network.target
-Documentation=https://gith
+Documentation=https://github.com/biels/lust
 
 [Service]
 ExecStart=/usr/local/bin/lust --config-file /etc/lust/config.yaml
