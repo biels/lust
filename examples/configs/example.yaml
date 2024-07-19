@@ -8,24 +8,62 @@ global_cache:
   # max_capacity: 500   # Or we can set 500MB max capacity.
 
 buckets:
-  profile-images:  # Define a bucket called "profile-images", this is accessible out of `/images/profile-images`.
-    mode: jit     # Optimise images as and when they're required then store them.
+  bis-profile-pictures:  # PROFILE_BUCKET
+    mode: jit
     formats:
-      png: true   # Enable PNG encoding.
-      jpeg: true  # Enable JPEG encoding.
-      webp: true  # Enable WebP encoding.
-      gif: false  # Disable GIF encoding.
+      png: true
+      jpeg: true
+      webp: true
+      gif: false
       webp_config:
-        quality: 90       # Set lossy quality to 90% for better quality
-        method: 6         # Higher quality encoding method
-        threading: true   # Enable multi-threaded encoding.
-      original_image_store_format: jpeg  # Store original images as JPEG
-    default_serving_format: webp            # Serve the WebP format by default.
-    default_serving_preset: medium-square   # Use the "medium-square" sizing preset by default.
+        quality: 90
+        method: 6
+        threading: true
+      original_image_store_format: jpeg
+    default_serving_format: webp
+    default_serving_preset: medium-square
     presets:
-      medium-square:  # Define a new resizing preset.
-        width: 500    # 500px
-        height: 500   # 500px
-    cache: null  # Use the global cache handler.
+      medium-square:
+        width: 500
+        height: 500
+    cache: null
 
-  # You can add more buckets here as needed
+  bis-event-images:  # EVENT_BUCKET
+    mode: jit
+    formats:
+      png: true
+      jpeg: true
+      webp: true
+      gif: false
+      webp_config:
+        quality: 90
+        method: 6
+        threading: true
+      original_image_store_format: jpeg
+    default_serving_format: webp
+    default_serving_preset: medium-rectangle
+    presets:
+      medium-rectangle:
+        width: 800
+        height: 600
+    cache: null
+
+  profile-images:  # Keeping the original bucket for compatibility
+    mode: jit
+    formats:
+      png: true
+      jpeg: true
+      webp: true
+      gif: false
+      webp_config:
+        quality: 90
+        method: 6
+        threading: true
+      original_image_store_format: jpeg
+    default_serving_format: webp
+    default_serving_preset: medium-square
+    presets:
+      medium-square:
+        width: 500
+        height: 500
+    cache: null
