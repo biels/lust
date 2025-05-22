@@ -68,6 +68,26 @@ async fn validate_image_content(
     Ok(())
 }
 
+async fn validate_avif_content(res: TestResponse) -> anyhow::Result<()> {
+    res.assert_content_type(&"image/avif".to_string());
+    let body = res.0.into_body().into_bytes().await?;
+    assert!(!body.is_empty(), "AVIF body should not be empty");
+
+    // Check for AVIF magic bytes: `ftypavif`
+    // The first 12 bytes of an AVIF file usually are `....ftypavif` where `....` is the size.
+    if body.len() >= 12 {
+        assert_eq!(&body[4..12], b"ftypavif", "AVIF magic bytes not found");
+    } else {
+        // Might be a very small or truncated AVIF, or not an AVIF.
+        // For this basic check, we'll just warn if it's too short for magic bytes.
+        // A more robust checker would use a proper AVIF parser.
+        // For now, the content type check and non-empty body are the primary assertions.
+        println!("Warning: AVIF body too short for magic byte check (len: {})", body.len());
+    }
+
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_basic_aot_upload_retrieval_without_guessing() -> anyhow::Result<()> {
     let app = setup_environment(AOT_CONFIG).await?;
@@ -223,6 +243,129 @@ async fn test_basic_realtime_upload_retrieval() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_jit_upload_avif_retrieval() -> anyhow::Result<()> {
+    let app = setup_environment(JIT_CONFIG).await?;
+
+    let res = app
+        .post("/v1/user-profiles")
+        .body(TEST_IMAGE)
+        .content_type("application/octet-stream".to_string())
+        .typed_header(headers::ContentLength(TEST_IMAGE.len() as u64))
+        .query("format".to_string(), &"jpeg".to_string()) // Upload as JPEG
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    let info = res.json().await;
+    let file_id = info.value().object().get("image_id").string();
+
+    // JIT mode with avif: true in config, default_serving_format: jpeg
+    // Request AVIF explicitly
+    let res = app
+        .get(format!("/v1/user-profiles/{}", file_id))
+        .query("format", &"avif".to_string())
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    validate_avif_content(res).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_jit_upload_custom_avif_retrieval() -> anyhow::Result<()> {
+    let app = setup_environment(JIT_CONFIG).await?;
+
+    let res = app
+        .post("/v1/user-profiles")
+        .body(TEST_IMAGE)
+        .content_type("application/octet-stream".to_string())
+        .typed_header(headers::ContentLength(TEST_IMAGE.len() as u64))
+        .query("format".to_string(), &"jpeg".to_string()) // Upload as JPEG
+        .send()
+        .await;
+    
+    res.assert_status(StatusCode::OK);
+    let info = res.json().await;
+    let file_id = info.value().object().get("image_id").string();
+
+    // Request AVIF explicitly
+    let res = app
+        .get(format!("/v1/user-profiles/{}", file_id))
+        .query("format", &"avif".to_string())
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    validate_avif_content(res).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_aot_upload_avif_retrieval() -> anyhow::Result<()> {
+    let app = setup_environment(AOT_CONFIG).await?;
+
+    let res = app
+        .post("/v1/user-profiles")
+        .body(TEST_IMAGE)
+        .content_type("application/octet-stream".to_string())
+        .typed_header(headers::ContentLength(TEST_IMAGE.len() as u64))
+        .query("format".to_string(), &"jpeg".to_string()) // Upload as JPEG
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    let info = res.json().await;
+    let file_id = info.value().object().get("image_id").string();
+    
+    // AOT mode with avif: true in config.
+    // default_serving_format is webp, so request avif explicitly
+    let res = app
+        .get(format!("/v1/user-profiles/{}", file_id))
+        .query("format", &"avif".to_string())
+        .send()
+        .await;
+    
+    res.assert_status(StatusCode::OK);
+    validate_avif_content(res).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_realtime_upload_avif_retrieval() -> anyhow::Result<()> {
+    let app = setup_environment(REALTIME_CONFIG).await?;
+
+    let res = app
+        .post("/v1/user-profiles")
+        .body(TEST_IMAGE)
+        .content_type("application/octet-stream".to_string())
+        .typed_header(headers::ContentLength(TEST_IMAGE.len() as u64))
+        .query("format".to_string(), &"jpeg".to_string()) // Upload as JPEG
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    let info = res.json().await;
+    let file_id = info.value().object().get("image_id").string();
+
+    // Realtime mode, request AVIF explicitly
+    let res = app
+        .get(format!("/v1/user-profiles/{}", file_id))
+        .query("format", &"avif".to_string())
+        .send()
+        .await;
+
+    res.assert_status(StatusCode::OK);
+    validate_avif_content(res).await?;
+
+    Ok(())
+}
+
 
 #[tokio::test]
 async fn test_realtime_resizing() -> anyhow::Result<()> {

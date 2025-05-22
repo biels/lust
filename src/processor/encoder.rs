@@ -1,6 +1,7 @@
-use crate::config::{ImageFormats, ImageKind};
+use crate::config::{AvifFormatConfig, ImageFormats, ImageKind};
 use bytes::Bytes;
 use image::{DynamicImage, ImageFormat};
+use ravif::{Config as AvifConfig, Encoder as AvifEncoder, RGBA8};
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -26,12 +27,16 @@ pub fn encode_following_config(
 
     let (tx, rx) = crossbeam::channel::bounded(4);
 
+    // let avif_config_from_cfg = cfg.avif_config; // This is now available
+
     for variant in ImageKind::variants() {
         if cfg.is_enabled(*variant) {
             let tx_local = tx.clone();
             let local = original_image.clone();
+            // Pass the actual avif_config from the bucket's format settings
+            let avif_config_to_pass = if *variant == ImageKind::Avif { Some(cfg.avif_config) } else { None };
             rayon::spawn(move || {
-                let result = encode_to(webp_config, &local, (*variant).into());
+                let result = encode_to(webp_config, avif_config_to_pass, &local, *variant);
                 tx_local
                     .send(result.map(|v| EncodedImage {
                         kind: *variant,
@@ -60,6 +65,7 @@ pub fn encode_following_config(
 
 pub fn encode_once(
     webp_cfg: webp::WebPConfig,
+    avif_cfg_opt: Option<AvifFormatConfig>, // Added
     to: ImageKind,
     img: DynamicImage,
     sizing_id: u32,
@@ -67,7 +73,7 @@ pub fn encode_once(
     let (tx, rx) = crossbeam::channel::bounded(4);
 
     rayon::spawn(move || {
-        let result = encode_to(webp_cfg, &img, to.into());
+        let result = encode_to(webp_cfg, avif_cfg_opt, &img, to); // Modified call
         tx.send(result.map(|v| EncodedImage {
             kind: to,
             buff: v,
@@ -82,25 +88,52 @@ pub fn encode_once(
 #[inline]
 pub fn encode_to(
     webp_cfg: webp::WebPConfig,
+    avif_cfg_opt: Option<AvifFormatConfig>, // Added
     img: &DynamicImage,
-    format: ImageFormat,
+    image_kind: ImageKind, // Changed from format: ImageFormat
 ) -> anyhow::Result<Bytes> {
-    if let ImageFormat::WebP = format {
+    if image_kind == ImageKind::Webp {
         let webp_image = webp::Encoder::from_image(webp_cfg, img);
         let encoded = webp_image.encode();
+        Ok(Bytes::from(encoded?.to_vec()))
+    } else if image_kind == ImageKind::Avif {
+        let rgba_img = img.to_rgba8();
+        let width = rgba_img.width();
+        let height = rgba_img.height();
 
-        return Ok(Bytes::from(encoded?.to_vec()));
-    }
+        // Convert image::Rgba<u8> pixels to ravif::RGBA8 pixels
+        // Rgba<u8>.0 is [u8; 4], so p.0 gives [u8; 4]
+        // RGBA8::new takes r, g, b, a as u8
+        let pixels: Vec<RGBA8> = rgba_img
+            .pixels()
+            .map(|p| RGBA8::new(p[0], p[1], p[2], p[3]))
+            .collect();
 
-    let mut buff = Cursor::new(Vec::new());
+        let ravif_config = avif_cfg_opt.map_or_else(
+            AvifConfig::default, // Use ravif's default if no specific config is provided
+            |c| AvifConfig {
+                quality: c.quality.unwrap_or(80.0), 
+                alpha_quality: c.alpha_quality.unwrap_or(100.0), // 100 for lossless alpha is common
+                speed: c.speed.unwrap_or(6), // ravif speed: 0 (best quality) to 10 (fastest)
+                ..Default::default() 
+            },
+        );
 
-    // Convert the image to RGB if it's RGBA and we're encoding to JPEG
-    let img_to_encode = if format == ImageFormat::Jpeg && img.color() == image::ColorType::Rgba8 {
-        DynamicImage::ImageRgb8(img.to_rgb8())
+        let avif_data = AvifEncoder::new(ravif_config).encode_rgba(width, height, &pixels)?;
+        Ok(Bytes::from(avif_data))
     } else {
-        img.clone()
-    };
+        let mut buff = Cursor::new(Vec::new());
+        // Convert our ImageKind to the image crate's ImageFormat for other formats
+        let format_for_image_crate: ImageFormat = image_kind.into();
 
-    img_to_encode.write_to(&mut buff, format)?;
-    Ok(Bytes::from(buff.into_inner()))
+        // Convert the image to RGB if it's RGBA and we're encoding to JPEG
+        let img_to_encode = if format_for_image_crate == ImageFormat::Jpeg && img.color() == image::ColorType::Rgba8 {
+            DynamicImage::ImageRgb8(img.to_rgb8())
+        } else {
+            img.clone()
+        };
+
+        img_to_encode.write_to(&mut buff, format_for_image_crate)?;
+        Ok(Bytes::from(buff.into_inner()))
+    }
 }
