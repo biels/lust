@@ -158,43 +158,98 @@ impl BucketController {
 
         let _permit = get_optional_permit(&self.global_limiter, &self.limiter).await?;
 
-        let sizing = size_preset
+        let effective_sizing_key_part = if let Some((w, h)) = custom_sizing {
+            format!("custom_{}x{}", w, h)
+        } else if let Some(preset_name) = size_preset.as_ref().or(self.config.default_serving_preset.as_ref()) {
+            if preset_name == "original" {
+                format!("original_{}", 0)
+            } else {
+                format!("preset_{}", crate::utils::crc_hash(preset_name.clone()))
+            }
+        } else {
+            format!("original_{}", 0)
+        };
+
+        let processed_image_cache_key = format!(
+            "{bucket}:{sizing_key_part}:{image}:{kind}",
+            bucket = self.bucket_id,
+            sizing_key_part = effective_sizing_key_part,
+            image = image_id,
+            kind = desired_kind.as_file_extension(),
+        );
+
+        let cache_backend = self
+            .cache
+            .as_ref()
+            .map(|c| c.as_ref())
+            .or_else(global_cache);
+
+        if let Some(cache) = cache_backend {
+            if let Some(cached_data) = cache.get(&processed_image_cache_key) {
+                debug!(
+                    "Serving image from processed cache with key: {}",
+                    processed_image_cache_key
+                );
+                let sizing_id_for_entry = if let Some(preset_name) =
+                    size_preset.as_ref().or(self.config.default_serving_preset.as_ref())
+                {
+                    if preset_name == "original" {
+                        0
+                    } else {
+                        crate::utils::crc_hash(preset_name.clone())
+                    }
+                } else {
+                    0
+                };
+                return Ok(Some(StoreEntry {
+                    data: cached_data,
+                    kind: desired_kind,
+                    sizing_id: sizing_id_for_entry,
+                }));
+            }
+        }
+
+        let sizing_for_storage_and_pipeline = size_preset
             .map(Some)
             .unwrap_or_else(|| self.config.default_serving_preset.clone());
 
-        let sizing_id = if let Some(sizing_preset) = sizing {
+        let sizing_id_for_storage_and_pipeline = if let Some(sizing_preset) = &sizing_for_storage_and_pipeline {
             if sizing_preset == "original" {
                 0
             } else {
-                crate::utils::crc_hash(sizing_preset)
+                crate::utils::crc_hash(sizing_preset.clone())
             }
         } else {
             0
         };
 
         // In real time situations
-        let fetch_kind = if self.config.mode == ProcessingMode::Realtime {
+        let fetch_kind_for_storage = if self.config.mode == ProcessingMode::Realtime {
             self.config.formats.original_image_store_format
         } else {
             desired_kind
         };
 
+        debug!(
+            "Processed image cache miss for key: {}. Fetching from storage.",
+            processed_image_cache_key
+        );
+
         let maybe_existing = self
             .caching_fetch(
                 image_id,
-                fetch_kind,
+                fetch_kind_for_storage,
                 if self.config.mode == ProcessingMode::Realtime {
                     0
                 } else {
-                    sizing_id
+                    sizing_id_for_storage_and_pipeline
                 },
             )
             .await?;
 
-        let (data, retrieved_kind) = match maybe_existing {
-            // If we're in JIT mode we want to re-encode the image and store it.
+        let (source_data, source_kind) = match maybe_existing {
             None => {
-                if self.config.mode == ProcessingMode::Jit {
+                if self.config.mode == ProcessingMode::Jit || self.config.mode == ProcessingMode::Realtime {
                     let base_kind = self.config.formats.original_image_store_format;
                     let value = self.caching_fetch(image_id, base_kind, 0).await?;
 
@@ -206,24 +261,45 @@ impl BucketController {
                     return Ok(None);
                 }
             }
-            Some(computed) => (computed, fetch_kind),
+            Some(computed) => (computed, fetch_kind_for_storage),
         };
 
-        // Small optimisation here when in AOT mode to avoid
-        // spawning additional threads.
         if self.config.mode == ProcessingMode::Aot {
+            if let Some(cache) = cache_backend {
+                debug!(
+                    "Caching processed image in AOT mode with key: {}",
+                    processed_image_cache_key
+                );
+                cache.insert(processed_image_cache_key.clone(), source_data.clone());
+            }
             return Ok(Some(StoreEntry {
-                data,
-                kind: retrieved_kind,
-                sizing_id,
+                data: source_data,
+                kind: source_kind,
+                sizing_id: sizing_id_for_storage_and_pipeline,
             }));
         }
 
         let pipeline = self.pipeline.clone();
         let result = tokio::task::spawn_blocking(move || {
-            pipeline.on_fetch(desired_kind, retrieved_kind, data, sizing_id, custom_sizing)
+            pipeline.on_fetch(
+                desired_kind,
+                source_kind,
+                source_data,
+                sizing_id_for_storage_and_pipeline,
+                custom_sizing,
+            )
         })
         .await??;
+
+        if let Some(ref store_entry) = result.result.response {
+            if let Some(cache) = cache_backend {
+                debug!(
+                    "Caching processed image in JIT/Realtime mode with key: {}",
+                    processed_image_cache_key
+                );
+                cache.insert(processed_image_cache_key.clone(), store_entry.data.clone());
+            }
+        }
 
         self.concurrent_upload(image_id.to_string(), result.result.to_store)
             .await?;

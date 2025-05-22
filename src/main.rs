@@ -73,9 +73,11 @@ async fn main() -> Result<()> {
 
     config::init(&args.config_file).await?;
 
-    if let Some(config) = config::config().global_cache {
-        cache::init_cache(config)?;
-    }
+    let global_cache_config = config::config().global_cache.unwrap_or_else(|| {
+        debug!("Global cache configuration not specified in config file, applying default cache settings (will default to 50 images if not further specified).");
+        crate::config::CacheConfig { max_images: None, max_capacity: None }
+    });
+    cache::init_cache(global_cache_config)?;
 
     setup_buckets().await?;
 
