@@ -38,6 +38,7 @@ impl Pipeline for JustInTimePipeline {
         let img = load_from_memory_with_format(&data, kind.into())?;
         let img = processor::encoder::encode_once(
             webp_config,
+            if self.formats.original_image_store_format == ImageKind::Avif { Some(self.formats.avif_config) } else { None },
             self.formats.original_image_store_format,
             img,
             0,
@@ -79,7 +80,13 @@ impl Pipeline for JustInTimePipeline {
             (img, 0)
         };
 
-        let encoded = processor::encoder::encode_once(webp_config, desired_kind, img, sizing_id)?;
+        let avif_cfg_to_pass = if desired_kind == ImageKind::Avif {
+            Some(self.formats.avif_config)
+        } else {
+            None
+        };
+
+        let encoded = processor::encoder::encode_once(webp_config, avif_cfg_to_pass, desired_kind, img, sizing_id)?;
 
         Ok(PipelineResult {
             response: Some(StoreEntry {

@@ -14,9 +14,13 @@ buckets:
       jpeg: true  # Enable JPEG encoding.
       webp: true  # Enable WebP encoding.
       gif: false  # Disable GIF encoding.
+      avif: true  # Enable AVIF encoding
 
       webp_config:
         quality: 80       # Set lossy quality to 80%
+      avif_config:
+        quality: 70.0
+        speed: 4
         method: 4         # Opt on the side of performance slightly more than quality.
         threading: true   # Enable multi-threaded encoding.
 

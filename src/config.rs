@@ -52,7 +52,7 @@ pub async fn init(config_file: &Path) -> Result<()> {
 
 fn validate(cfg: &RuntimeConfig) -> Result<()> {
     for (name, cfg) in cfg.buckets.iter() {
-        if !cfg.formats.png && !cfg.formats.jpeg && !cfg.formats.gif && !cfg.formats.webp {
+        if !cfg.formats.png && !cfg.formats.jpeg && !cfg.formats.gif && !cfg.formats.webp && !cfg.formats.avif {
             return Err(anyhow!(
                 "Bucket {} is invalid: At least one encoding format must be enabled.",
                 name
@@ -212,6 +212,9 @@ pub enum ImageKind {
 
     /// The GIF encoding format.
     Gif,
+
+    /// The AVIF encoding format.
+    Avif,
 }
 
 #[allow(clippy::from_over_into)]
@@ -222,6 +225,9 @@ impl Into<image::ImageFormat> for ImageKind {
             Self::Jpeg => image::ImageFormat::Jpeg,
             Self::Gif => image::ImageFormat::Gif,
             Self::Webp => image::ImageFormat::WebP,
+            Self::Avif => image::ImageFormat::Unsupported(
+                "AVIF not directly supported by image crate version, handle in encoder",
+            ),
         }
     }
 }
@@ -233,10 +239,12 @@ impl ImageKind {
             "image/jpeg" => Some(Self::Jpeg),
             "image/gif" => Some(Self::Gif),
             "image/webp" => Some(Self::Webp),
+            "image/avif" => Some(Self::Avif),
             "png" => Some(Self::Png),
             "jpeg" => Some(Self::Jpeg),
             "gif" => Some(Self::Gif),
             "webp" => Some(Self::Webp),
+            "avif" => Some(Self::Avif),
             _ => None,
         }
     }
@@ -247,6 +255,7 @@ impl ImageKind {
             image::ImageFormat::Jpeg => Some(Self::Jpeg),
             image::ImageFormat::Gif => Some(Self::Gif),
             image::ImageFormat::WebP => Some(Self::Webp),
+            image::ImageFormat::Avif => Some(Self::Avif),
             _ => None,
         }
     }
@@ -261,11 +270,12 @@ impl ImageKind {
             ImageKind::Jpeg => "jpeg",
             ImageKind::Webp => "webp",
             ImageKind::Gif => "gif",
+            ImageKind::Avif => "avif",
         }
     }
 
     pub fn variants() -> &'static [Self] {
-        &[Self::Png, Self::Jpeg, Self::Gif, Self::Webp]
+        &[Self::Png, Self::Jpeg, Self::Gif, Self::Webp, Self::Avif]
     }
 }
 
@@ -305,6 +315,18 @@ pub struct ImageFormats {
     /// performance behavour.
     pub webp_config: WebpConfig,
 
+    #[serde(default)]
+    /// Enable AVIF re-encoding.
+    ///
+    /// Defaults to `false`.
+    pub avif: bool,
+
+    #[serde(default)]
+    /// The (optional) AVIF encoder config.
+    ///
+    /// This is used for fine-tuning the AVIF encoder.
+    pub avif_config: AvifFormatConfig,
+
     #[serde(default = "default_original_format")]
     /// The format to encode and store the original image as.
     ///
@@ -320,6 +342,7 @@ impl ImageFormats {
             ImageKind::Jpeg => self.jpeg,
             ImageKind::Webp => self.webp,
             ImageKind::Gif => self.gif,
+            ImageKind::Avif => self.avif,
         }
     }
 
@@ -332,6 +355,10 @@ impl ImageFormats {
             return ImageKind::Jpeg;
         }
 
+        if self.avif {
+            return ImageKind::Avif;
+        }
+
         if self.webp {
             return ImageKind::Webp;
         }
@@ -342,6 +369,21 @@ impl ImageFormats {
 
         panic!("Invalid configuration, expected at least one enabled format.")
     }
+}
+
+#[derive(Copy, Clone, Debug, Default, Deserialize)]
+pub struct AvifFormatConfig {
+    /// Quality for RGB channels (0-100, where 100 is best).
+    /// ravif default: 80.0
+    pub quality: Option<f32>,
+
+    /// Quality for the alpha channel (0-100, where 100 is best).
+    /// ravif default: 80.0 (but we'll default to 100.0 for potentially lossless alpha if not set)
+    pub alpha_quality: Option<f32>,
+
+    /// Encoding speed (0-10, where 0 is slowest/best compression, 10 is fastest).
+    /// ravif default: 4
+    pub speed: Option<u8>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
