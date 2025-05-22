@@ -3,6 +3,8 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use once_cell::sync::OnceCell;
 use std::ops::Deref;
+#[allow(unused_imports)]
+use log::debug;
 
 static GLOBAL_CACHE: OnceCell<Cache> = OnceCell::new();
 
@@ -11,22 +13,22 @@ pub fn new_cache(cfg: CacheConfig) -> anyhow::Result<Option<Cache>> {
         return Err(anyhow!(
             "Cache must be *either* based off of number of images or amount of memory, not both."
         ));
-    } else if cfg.max_capacity.is_none() && cfg.max_images.is_none() {
-        return Ok(None);
     }
 
-    let mut cache = moka::sync::CacheBuilder::default();
+    let mut builder = moka::sync::CacheBuilder::default();
+
     if let Some(max_items) = cfg.max_images {
-        cache = cache.max_capacity(max_items as u64)
-    }
-
-    if let Some(max_memory) = cfg.max_capacity {
-        cache = cache
+        builder = builder.max_capacity(max_items as u64);
+    } else if let Some(max_memory) = cfg.max_capacity {
+        builder = builder
             .weigher(|k: &String, v: &Bytes| (k.len() + v.len()) as u32)
             .max_capacity((max_memory * 1024 * 1024) as u64);
+    } else {
+        debug!("Applying default cache configuration: max_images = 50");
+        builder = builder.max_capacity(50);
     }
 
-    Ok(Some(cache.build().into()))
+    Ok(Some(builder.build().into()))
 }
 
 pub fn init_cache(cfg: CacheConfig) -> anyhow::Result<()> {
