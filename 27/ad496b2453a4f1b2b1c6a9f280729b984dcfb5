@@ -1,0 +1,23 @@
+src/controller.rs
+  s_a5fd22d93e82aa::t_e0a295afeb5f86 161,183-188,191-200,318-319,334-344
+src/routes.rs
+  s_a5fd22d93e82aa::t_67752ff87b82df 14-16,71-84,238-241,272-292,333-334,351-363
+src/pipelines/jit.rs
+  s_a5fd22d93e82aa::t_64d039dcd1bd15 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "27ad496b2453a4f1b2b1c6a9f280729b984dcfb5",
+  "prompts": {},
+  "sessions": {
+    "s_a5fd22d93e82aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e4f41-ec60-7fc2-b688-d9a5cf0c2b7f",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Biel Simon Rojas <bielsimon2@gmail.com>"
+    }
+  }
+}
