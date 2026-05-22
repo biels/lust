@@ -11,6 +11,9 @@ use crate::config::{config, ImageKind};
 use crate::controller::{get_bucket_by_name, BucketController, UploadInfo};
 use crate::pipelines::ProcessingMode;
 
+const IMAGE_CACHE_CONTROL: &str = "public, max-age=31536000, s-maxage=31536000, immutable";
+const ACCEPT_VARY_HEADER: &str = "Accept";
+
 #[derive(Debug, Object)]
 pub struct Detail {
     /// Additional information regarding the response.
@@ -65,7 +68,20 @@ pub enum DeleteResponse {
 #[derive(ApiResponse)]
 pub enum FetchResponse {
     #[oai(status = 200)]
-    Ok(Binary<Vec<u8>>, #[oai(header = "content-type")] String),
+    Ok(
+        Binary<Vec<u8>>,
+        #[oai(header = "content-type")] String,
+        #[oai(header = "cache-control")] String,
+        #[oai(header = "etag")] String,
+        #[oai(header = "vary")] String,
+    ),
+
+    #[oai(status = 304)]
+    NotModified(
+        #[oai(header = "cache-control")] String,
+        #[oai(header = "etag")] String,
+        #[oai(header = "vary")] String,
+    ),
 
     /// The request is invalid with the current configuration.
     ///
@@ -219,6 +235,10 @@ impl LustApi {
         /// A set of `,` seperated content-types that could be sent as a response.
         /// E.g. `image/png,image/webp,image/gif`
         accept: Header<Option<String>>,
+
+        /// The entity tag from a cached response.
+        #[oai(name = "if-none-match")]
+        if_none_match: Header<Option<String>>,
     ) -> Result<FetchResponse> {
         let bucket = match get_bucket_by_name(&*bucket) {
             None => return Ok(FetchResponse::bucket_not_found(&bucket)),
@@ -249,10 +269,27 @@ impl LustApi {
             .await?;
         match img {
             None => Ok(FetchResponse::image_not_found(image_id.0)),
-            Some(img) => Ok(FetchResponse::Ok(
-                Binary(img.data.to_vec()),
-                img.kind.as_content_type(),
-            )),
+            Some(img) => {
+                let cache_control = IMAGE_CACHE_CONTROL.to_string();
+                let etag = image_etag(&image_id.0, img.kind, img.sizing_id);
+                let vary = ACCEPT_VARY_HEADER.to_string();
+
+                if if_none_match
+                    .0
+                    .as_deref()
+                    .is_some_and(|value| etag_matches(value, &etag))
+                {
+                    return Ok(FetchResponse::NotModified(cache_control, etag, vary));
+                }
+
+                Ok(FetchResponse::Ok(
+                    Binary(img.data.to_vec()),
+                    img.kind.as_content_type(),
+                    cache_control,
+                    etag,
+                    vary,
+                ))
+            }
         }
     }
 
@@ -293,7 +330,8 @@ fn get_image_kind(
             Some(accept) => {
                 let parts = accept.split(',');
                 for accepted in parts {
-                    if let Some(kind) = ImageKind::from_content_type(accepted) {
+                    let content_type = accepted.split(';').next().unwrap_or("").trim();
+                    if let Some(kind) = ImageKind::from_content_type(content_type) {
                         return kind;
                     }
                 }
@@ -309,4 +347,18 @@ fn get_image_kind(
                 .unwrap_or_else(|| bucket.cfg().formats.first_enabled_format()),
         },
     }
+}
+
+fn image_etag(image_id: &str, kind: ImageKind, sizing_id: u32) -> String {
+    format!(
+        "\"lust:{image_id}:{kind}:{sizing_id}\"",
+        kind = kind.as_file_extension()
+    )
+}
+
+fn etag_matches(if_none_match: &str, etag: &str) -> bool {
+    if_none_match
+        .split(',')
+        .map(str::trim)
+        .any(|candidate| candidate == "*" || candidate == etag)
 }

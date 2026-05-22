@@ -3,7 +3,7 @@ use crate::pipelines::{Pipeline, PipelineResult, StoreEntry};
 use crate::processor;
 use bytes::Bytes;
 use hashbrown::HashMap;
-use image::{ImageFormat, load_from_memory_with_format};
+use image::load_from_memory_with_format;
 
 pub struct JustInTimePipeline {
     presets: HashMap<u32, ResizingConfig>,

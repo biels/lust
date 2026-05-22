@@ -158,19 +158,7 @@ impl BucketController {
 
         let _permit = get_optional_permit(&self.global_limiter, &self.limiter).await?;
 
-        let sizing = size_preset
-            .map(Some)
-            .unwrap_or_else(|| self.config.default_serving_preset.clone());
-
-        let sizing_id = if let Some(sizing_preset) = sizing {
-            if sizing_preset == "original" {
-                0
-            } else {
-                crate::utils::crc_hash(sizing_preset)
-            }
-        } else {
-            0
-        };
+        let sizing_id = self.sizing_id(size_preset);
 
         // In real time situations
         let fetch_kind = if self.config.mode == ProcessingMode::Realtime {
@@ -192,21 +180,24 @@ impl BucketController {
             .await?;
 
         let (data, retrieved_kind) = match maybe_existing {
-            // If we're in JIT mode we want to re-encode the image and store it.
-            None => {
-                if self.config.mode == ProcessingMode::Jit {
-                    let base_kind = self.config.formats.original_image_store_format;
-                    let value = self.caching_fetch(image_id, base_kind, 0).await?;
-
-                    match value {
-                        None => return Ok(None),
-                        Some(original) => (original, base_kind),
-                    }
-                } else {
-                    return Ok(None);
-                }
+            Some(computed) if self.config.mode != ProcessingMode::Realtime => {
+                return Ok(Some(StoreEntry {
+                    data: computed,
+                    kind: fetch_kind,
+                    sizing_id,
+                }));
             }
             Some(computed) => (computed, fetch_kind),
+            None if self.config.mode == ProcessingMode::Jit => {
+                let base_kind = self.config.formats.original_image_store_format;
+                let value = self.caching_fetch(image_id, base_kind, 0).await?;
+
+                match value {
+                    None => return Ok(None),
+                    Some(original) => (original, base_kind),
+                }
+            }
+            None => return Ok(None),
         };
 
         // Small optimisation here when in AOT mode to avoid
@@ -324,6 +315,8 @@ impl BucketController {
 
                 if let Some(ref cache) = cache {
                     cache.insert(cache_key, store_entry.data);
+                } else if let Some(cache) = global_cache() {
+                    cache.insert(cache_key, store_entry.data);
                 }
 
                 Ok::<_, anyhow::Error>(())
@@ -337,5 +330,17 @@ impl BucketController {
         }
 
         Ok(image_upload_info)
+    }
+
+    fn sizing_id(&self, size_preset: Option<String>) -> u32 {
+        let sizing = size_preset.or_else(|| self.config.default_serving_preset.clone());
+
+        match sizing.as_deref() {
+            Some("original") | None => 0,
+            Some(sizing_preset) if self.config.presets.contains_key(sizing_preset) => {
+                crate::utils::crc_hash(sizing_preset)
+            }
+            Some(_) => 0,
+        }
     }
 }
